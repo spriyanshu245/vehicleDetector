@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "dnn_model",
+			"path": "../../../Downloads/dnn_model"
+		},
+		{
+			"name": "vehicleDetector",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
