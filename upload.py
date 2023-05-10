@@ -1,4 +1,4 @@
-# app.py
+
 from flask import Flask, flash, request, redirect, url_for, render_template
 import urllib.request
 import os
@@ -11,8 +11,6 @@ import numpy as np
 from dom import DOM
 import imutils
 import easyocr
-from matplotlib import pyplot as plt
-
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'static/uploads/'
@@ -27,7 +25,6 @@ ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -39,38 +36,39 @@ def upload_image():
         flash('No file part')
         return redirect(request.url)
     files = request.files.getlist('file')
-    print('files ::', files)
+    print('files ::',files)
     file_names = []
-    for file in files:
-        print('loop file', file)
-        # if file.filename == '':
-        #     flash('Please select images first')
-        #     return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file_names.append(filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            print('upload_image filename: ' + filename)
-            flash('selected vehicle uploaded successfully')
-        else:
-            flash('Allowed image types are - png, jpg, jpeg')
-            return redirect(request.url)
-    return render_template('index.html', filename=filename)
+    numberPlate = None
+    numberPlates = []
+    res = any(ele.filename == '' for ele in files)
+    if res == True :
+        flash('Please select all images first')
+    else :
+        for file in files:
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_names.append(filename)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                numberPlate = detector(img_path)
+                numberPlates.append(numberPlate)
+                print('nice', numberPlates)
+            else:
+                flash('Allowed image types are - png, jpg, jpeg')
+                return redirect(request.url)
+    if numberPlate is None or " " :
+        numberPlate = " "
+        return render_template('index.html', filenames=file_names, emptyPlate = "Number plate not found, retry !")
+    else :
+        return render_template('index.html', filenames=file_names, numberPlate = numberPlate, headermsg = "Submission Successful")
 
 
 @app.route('/display/<filename>')
 def display_image(filename):
-    # print('display_image filename: ' + filename)
     return redirect(url_for('static', filename='uploads/' + filename), code=301)
 
 
-@app.route('/cards')
-def display_cards():
-    return render_template('cards.html')
-
-
-@app.route('/')
-def detector():
+def detector(feedImg):
     class VehicleDetector:
 
         def __init__(self):
@@ -100,39 +98,39 @@ def detector():
 
     # Initialize DOM
     iqa = DOM()
-
     # Set the threshold
     threshold = 0.94
-
     # Initialize the vehicle detector
     vd = VehicleDetector()
-
     # Initialize EasyOCR reader
     reader = easyocr.Reader(['en'])
-
     # Load images from a folder
-    images_folder = glob.glob("static/uploads/Capture1.jpeg")
+    images_folder = glob.glob(feedImg)
 
     # Loop through all the images
     for img_path in images_folder:
-        img = cv2.imread(img_path)
+        if img_path != " ":
+            img = cv2.imread(img_path)
 
         # Image quality check
         while True:
             score = iqa.get_sharpness(img)
+            print(score)
             if score < threshold:
                 print(f"Image quality too low for image {img_path}, reupload.")
+                flash(f"Image quality too low for image {img_path}, reupload.")
                 break
                 # Reload image (in real use case, ask the user to re-upload)
                 # img = cv2.imread(img_path)
             else:
+                flash(f"Image quality good {img_path}")
                 break
 
         # Vehicle detection check
         while True:
             vehicle_boxes = vd.detect_vehicles(img)
             if not vehicle_boxes:
-                print(f"No vehicle found in image {img_path}, reupload.")
+                flash(f"No vehicle found in image {img_path}, reupload.")
                 break
                 # Reload image (in real use case, ask the user to re-upload)
             #     img = cv2.imread(img_path)
@@ -164,38 +162,31 @@ def detector():
                 print("contour found")
             except cv2.error as e:
                 print("Error drawing contours:", e)
-                new_image = mask.copy()
-
-            new_image = cv2.bitwise_and(img, img, mask=mask)
-
-            # plt.imshow(cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB))
-
             (x, y) = np.where(mask == 255)
             (x1, y1) = (np.min(x), np.min(y))
             (x2, y2) = (np.max(x), np.max(y))
             cropped_image = gray[x1:x2 + 1, y1:y2 + 1]
 
-            # cropped num plate
-            plt.imshow(cv2.cvtColor(cropped_image, cv2.COLOR_BGR2RGB))
-
             reader = easyocr.Reader(['en'])
             result = reader.readtext(cropped_image)
-            print("here", result)
-
             try:
                 text = result[0][-2]
-                print(text)
+                numberPlate = f"number plate :{text}"
+                flash(numberPlate)
+                print("number plate :",text)
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 res = cv2.putText(img, text=text, org=(
                     approx[0][0][0], approx[1][0][1] + 60), fontFace=font, fontScale=1, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
                 res = cv2.rectangle(img, tuple(approx[0][0]), tuple(
                     approx[2][0]), (0, 255, 0), 3)
+                return numberPlate
+            
             except IndexError as e:
                 print("Error extracting text from result:", e)
                 res = img.copy()
 
         else:
-            print("Number plate not found in image", img_path)
+            flash("Number plate not found in image", img_path)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=True)
