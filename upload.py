@@ -40,11 +40,7 @@ def upload_image():
     file_names = []
     numberPlate = None
     numberPlates = []
-    res = any(ele.filename == '' for ele in files)
-    if res == True :
-        flash('Please select all images first')
-    else :
-        for file in files:
+    for file in files:
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 file_names.append(filename)
@@ -56,7 +52,8 @@ def upload_image():
             else:
                 flash('Allowed image types are - png, jpg, jpeg')
                 return redirect(request.url)
-    if numberPlate is None or " " :
+    res = any(ele != None for ele in numberPlates)
+    if res == True :
         numberPlate = " "
         return render_template('index.html', filenames=file_names, emptyPlate = "Number plate not found, retry !")
     else :
