@@ -1,0 +1,11 @@
+flask
+easyocr
+dom
+numpy
+imutils
+opencv-python
+opencv-contrib-python
+pillow
+matplotlib
+git+https://github.com/umang-singhal/pydom.git
+torch torchvision -f https://download.pytorch.org/whl/torch_stable.html
