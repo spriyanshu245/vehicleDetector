@@ -126,12 +126,13 @@ def detector(feedImg):
         # Vehicle detection check
         while True:
             vehicle_boxes = vd.detect_vehicles(img)
-            if not vehicle_boxes:
-                flash(f"No vehicle found in image {img_path}, reupload.")
+            if vehicle_boxes:
+                flash(f"vehicle found in image {img_path}.")
                 break
                 # Reload image (in real use case, ask the user to re-upload)
             #     img = cv2.imread(img_path)
             else:
+                 flash(f"No vehicle found in image {img_path}, Reupload.")
                 break
 
         # Number plate recognition
@@ -157,6 +158,7 @@ def detector(feedImg):
             try:
                 new_image = cv2.drawContours(mask, [location], 0, 255, -1)
                 print("contour found")
+                flash(f"Numner Plate Found {img_path}")
             except cv2.error as e:
                 print("Error drawing contours:", e)
             (x, y) = np.where(mask == 255)
