@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
+    integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"
+    integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+    crossorigin="anonymous"></script>
+  <title>Image Upload</title>
+</head>
+
+<body>
+  <div class="container">
+    <form method="post" action="/" enctype="multipart/form-data">
+      {% if headermsg %}
+      <h1>{{headermsg}}</h1>
+      <p>{{numberPlate}}</p>
+          {% else %}
+          <h1>Hello, user!</h1> 
+      <p>Capture steady photos with good lighting. <br>Make sure to include at least one image with the number plate
+        visible.</p><br>
+        <p>{{emptyPlate}}</p>
+        {% endif %}
+      {% for msg in get_flashed_messages() %}
+      <div class="alert alert-warning alert-dismissible" role="alert">
+        {{ msg }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      {% endfor %}
+      <div class="cards">
+        <div class="card">
+          {% if filenames %}
+          <div class="image-box">
+            <img src="{{ url_for('display_image', filename=filenames[0]) }}" class="img-fluid img-thumbnail">
+          </div>
+          {% else %}
+          <div class="image-box"></div>
+          {% endif %}
+          <div class="buttons">
+            <label class="browse">
+              Browse
+              <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
+            </label>
+            <button class="capture" onclick="openCamera(this)">Capture</button>
+          </div>
+        </div>
+        <div class="card">
+          {% if filenames %}
+          <div class="image-box">
+            <img src="{{ url_for('display_image', filename=filenames[1]) }}" class="img-fluid img-thumbnail">
+          </div>
+          {% else %}
+          <div class="image-box"></div>
+          {% endif %} <div class="buttons">
+            <label class="browse">
+              Browse
+              <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
+            </label>
+            <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
+          </div>
+        </div>
+        <div class="card">
+          {% if filenames %}
+          <div class="image-box">
+            <img src="{{ url_for('display_image', filename=filenames[2]) }}" class="img-fluid img-thumbnail">
+          </div>
+          {% else %}
+          <div class="image-box"></div>
+          {% endif %}
+          <div class="buttons">
+            <label class="browse">
+              Browse
+              <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
+            </label>
+            <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
+          </div>
+        </div>
+        <div class="card">
+          {% if filenames %}
+          <div class="image-box">
+            <img src="{{ url_for('display_image', filename=filenames[3]) }}" class="img-fluid img-thumbnail">
+          </div>
+          {% else %}
+          <div class="image-box"></div>
+          {% endif %} <div class="buttons">
+            <label class="browse">
+              Browse
+              <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
+            </label>
+            <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
+          </div>
+        </div>
+        <!-- Repeat card div 3 more times -->
+      </div>
+      <button value="submit" class="submit">Submit</button>
+  </div>
+  </form>
+
+  <div class="modal" id="cameraModal">
+    <div class="modal-content">
+      <video id="cameraVideo" autoplay></video>
+      <button id="captureButton">Capture</button>
+    </div>
+  </div>
+
+  
+  <script>
+    function loadImagePreview(event, inputElement) {
+      console.log(event, inputElement)
+      const imageBox = inputElement.closest('.card').querySelector('.image-box');
+      const reader = new FileReader();
+
+      reader.onload = function () {
+        const img = new Image();
+        img.src = reader.result;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+
+        // Clear previous images and append the new one
+        imageBox.innerHTML = '';
+        imageBox.appendChild(img);
+      };
+
+      reader.readAsDataURL(event.target.files[0]);
+    }
+
+    async function openCamera(buttonElement) {
+      const constraints = {
+        video: {
+          facingMode: "environment"
+        }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const video = document.getElementById('cameraVideo');
+        video.srcObject = stream;
+        video.autoplay = true;
+
+        const modal = document.getElementById('cameraModal');
+        modal.style.display = 'block';
+
+        const captureButton = document.getElementById('captureButton');
+        captureButton.onclick = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0);
+
+          const img = new Image();
+          img.src = canvas.toDataURL('image/jpeg');
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+
+          const imageBox = buttonElement.closest('.card').querySelector('.image-box');
+          imageBox.innerHTML = '';
+          imageBox.appendChild(img);
+
+          // Close the modal and stop the video stream
+          modal.style.display = 'none';
+          video.srcObject.getTracks().forEach(track => track.stop());
+        };
+      } catch (err) {
+        console.error(err);
+        alert('Error accessing the camera');
+      }
+    }
+
+    // Add a validation function
+    function validateForm() {
+    var cards = document.querySelectorAll('.card');
+    for (var i = 0; i < cards.length; i++) {
+      var imageBox = cards[i].querySelector('.image-box');
+      if (!imageBox.hasChildNodes()) { // If there are no child nodes, i.e., no images
+        alert('Please upload an image in all cards before submitting');
+        return false; // Prevent form submission
+      }
+    }
+    return true; // All cards have images, allow form submission
+  }
+
+
+
+  // Attach the validation function to the submit button
+  document.querySelector('.submit').addEventListener('click', function(event) {
+    if (!validateForm()) {
+      event.preventDefault(); // Prevent form submission if validation fails
+    }
+  });
+
+  
+
+    // ...
+  </script>
+</body>
+
+</html>
