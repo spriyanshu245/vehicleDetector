@@ -1,0 +1,5 @@
+dnn_model/
+vdetector.code-workspace/
+backup/
+__pycache__/upload.cpython-310.pyc/
+.DS_Store/
