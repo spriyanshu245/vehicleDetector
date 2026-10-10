@@ -1,9 +1,12 @@
-easyocr
-dom
-numpy
-imutils
-opencv-python
-opencv-contrib-python
-pillow
-matplotlib
-git+https://github.com/umang-singhal/pydom.git
+# CPU-only torch: this index MUST stay first so pip prefers the +cpu wheels
+# (the default PyPI torch wheels bundle CUDA and are ~800MB).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+flask==3.1.3
+gunicorn==26.2.0
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+pillow==11.3.0
+torch==2.4.1
+torchvision==0.19.1
+easyocr==1.7.2

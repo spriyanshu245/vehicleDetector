@@ -1,149 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script><title>Image Upload</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vehicleDetector — Number Plate Recognition</title>
+<meta name="description" content="Upload a vehicle photo and read its number plate with OpenCV + EasyOCR.">
+<style>
+  :root {
+    --bg: #0b0d12; --card: #14171f; --border: rgba(255,255,255,.09);
+    --text: #f2f4f8; --muted: #9aa3b2; --accent: #22d3ee; --accent2: #818cf8;
+    --good: #34d399; --bad: #f87171; --radius: 16px;
+    --ease: cubic-bezier(.22,1,.36,1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(34,211,238,.08), transparent 60%),
+                radial-gradient(1000px 500px at 90% 110%, rgba(129,140,248,.09), transparent 60%),
+                var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+  header { text-align: center; margin-bottom: 2.5rem; animation: rise .8s var(--ease) both; }
+  header h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -.03em; }
+  header h1 span { background: linear-gradient(120deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header p { color: var(--muted); margin-top: .6rem; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: .5rem; margin-top: 1rem;
+    font-size: .82rem; color: var(--muted); background: var(--card);
+    border: 1px solid var(--border); border-radius: 999px; padding: .4rem .95rem;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.ready { background: var(--good); box-shadow: 0 0 0 4px rgba(52,211,153,.15); }
+  .dot.warming { background: #fbbf24; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+
+  .drop {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    background: var(--card); padding: 3rem 2rem; text-align: center; cursor: pointer;
+    transition: border-color .25s var(--ease), transform .25s var(--ease), background .25s;
+    animation: rise .8s var(--ease) .1s both;
+  }
+  .drop:hover, .drop.drag { border-color: var(--accent); background: rgba(34,211,238,.05); transform: translateY(-2px); }
+  .drop input { display: none; }
+  .drop .icon { font-size: 2.4rem; margin-bottom: .8rem; }
+  .drop p { color: var(--muted); font-size: .95rem; }
+  .drop p strong { color: var(--text); }
+
+  .preview-card {
+    display: none; margin-top: 1.5rem; background: var(--card);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem;
+    animation: rise .5s var(--ease) both;
+  }
+  .preview-card.show { display: block; }
+  .preview-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 700px) { .preview-row { grid-template-columns: 1fr; } }
+  .img-stage { position: relative; border-radius: 12px; overflow: hidden; background: #000; min-height: 200px; display: grid; place-items: center; }
+  .img-stage img, .img-stage canvas { max-width: 100%; display: block; border-radius: 12px; }
+  .img-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .controls { display: flex; flex-direction: column; gap: 1rem; }
+  .btn {
+    border: none; cursor: pointer; font-weight: 700; font-size: 1rem; color: #062a30;
+    background: linear-gradient(120deg, var(--accent), var(--accent2)); color: #0b0d12;
+    padding: .9rem 1.6rem; border-radius: 999px;
+    transition: transform .2s var(--ease), opacity .2s, box-shadow .2s;
+    box-shadow: 0 8px 28px rgba(34,211,238,.25);
+  }
+  .btn:hover:not(:disabled) { transform: scale(1.03); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+  .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+  .btn .spin {
+    display: inline-block; width: 16px; height: 16px; margin-right: .6rem; vertical-align: -3px;
+    border: 2px solid rgba(0,0,0,.25); border-top-color: currentColor; border-radius: 50%;
+    animation: rot .7s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  .result { display: none; }
+  .result.show { display: block; animation: rise .5s var(--ease) both; }
+  .plate {
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: .12em;
+    background: #0b0d12; border: 2px solid var(--accent); border-radius: 12px;
+    padding: 1rem; text-align: center; margin-bottom: 1rem; color: #fff;
+  }
+  .conf { display: flex; align-items: center; gap: .8rem; color: var(--muted); font-size: .9rem; margin-bottom: 1rem; }
+  .conf .bar { flex: 1; height: 8px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+  .conf .bar i { display: block; height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--good)); transition: width .8s var(--ease); }
+  .row-btns { display: flex; gap: .8rem; flex-wrap: wrap; }
+  .empty-note { color: var(--muted); font-size: .92rem; }
+
+  .error {
+    display: none; margin-top: 1.5rem; padding: 1rem 1.25rem; border-radius: 12px;
+    background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.35); color: #fca5a5;
+    font-size: .95rem; animation: rise .4s var(--ease) both;
+  }
+  .error.show { display: block; }
+  footer { text-align: center; color: var(--muted); font-size: .82rem; margin-top: 3rem; }
+  footer a { color: var(--accent); text-decoration: none; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
 </head>
-
 <body>
-  <div class="container">
-    <form method="post" action="/" enctype="multipart/form-data">
-    <h1>Hello, user!</h1>
-    <p>Capture steady photos with good lighting. <br>Make sure to include at least one image with the number plate visible.</p><br>
-    {% for msg in get_flashed_messages() %}
-      <div class="alert alert-warning alert-dismissible" role="alert">
-        {{ msg }}
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      {% endfor %}
-    <div class="cards">
-      <div class="card">
-        <div class="image-box"></div>
-        <div class="buttons">
-          <label class="browse">
-            Browse
-            <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
-          </label>
-          <button class="capture" onclick="openCamera(this)">Capture</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="image-box"></div>
-        <div class="buttons">
-          <label class="browse">
-            Browse
-            <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
-          </label>
-          <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="image-box"></div>
-        <div class="buttons">
-          <label class="browse">
-            Browse
-            <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
-          </label>
-          <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="image-box"></div>
-        <div class="buttons">
-          <label class="browse">
-            Browse
-            <input type="file" name="file" accept="image/*" hidden onchange="loadImagePreview(event, this)">
-          </label>
-          <button class="capture" name="file" onclick="openCamera(this)">Capture</button>
-        </div>
-      </div>
-      <!-- Repeat card div 3 more times -->
-    </div>
-    <!-- <input type="submit" value="submit" name="submit" class="btn btn-info"> -->
-    <button value="submit" class="submit">Submit</button>
-  </div>
-</form>
+<div class="wrap">
+  <header>
+    <h1>vehicle<span>Detector</span></h1>
+    <p>Upload a vehicle photo — OpenCV finds the plate, EasyOCR reads it.</p>
+    <div class="status-pill"><span class="dot warming" id="statusDot"></span><span id="statusText">Warming up AI model…</span></div>
+  </header>
 
-  <div class="modal" id="cameraModal">
-    <div class="modal-content">
-      <video id="cameraVideo" autoplay></video>
-      <button id="captureButton">Capture</button>
+  <div class="drop" id="drop">
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="icon">📷</div>
+    <p><strong>Drag &amp; drop</strong> a vehicle photo here, <strong>click</strong> to browse,<br>or paste from clipboard <span style="opacity:.6">(Ctrl/⌘+V)</span></p>
+    <p style="margin-top:.6rem;font-size:.8rem">PNG · JPG · JPEG · WEBP — max 16 MB</p>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <div class="preview-card" id="previewCard">
+    <div class="preview-row">
+      <div class="img-stage" id="imgStage">
+        <img id="previewImg" alt="Uploaded vehicle">
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="controls">
+        <button class="btn" id="detectBtn" disabled>Detect number plate</button>
+        <div class="result" id="result">
+          <div class="plate" id="plateText">—</div>
+          <div class="conf"><span>Confidence</span><div class="bar"><i id="confBar" style="width:0%"></i></div><strong id="confVal">–</strong></div>
+          <div class="row-btns">
+            <button class="btn secondary" id="copyBtn">Copy plate</button>
+            <button class="btn secondary" id="resetBtn">New image</button>
+          </div>
+        </div>
+        <p class="empty-note" id="hint">Pick an image, then hit detect. Sharp, well-lit photos with a visible plate work best.</p>
+      </div>
     </div>
   </div>
 
-  <script>
-    function loadImagePreview(event, inputElement) {
-      console.log(event, inputElement)
-      const imageBox = inputElement.closest('.card').querySelector('.image-box');
-      const reader = new FileReader();
+  <footer>Contour localization (OpenCV) + OCR (EasyOCR) · <a href="https://github.com/spriyanshu245/vehicleDetector" target="_blank" rel="noopener">source</a></footer>
+</div>
 
-      reader.onload = function() {
-        const img = new Image();
-        img.src = reader.result;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const previewCard = document.getElementById('previewCard');
+const previewImg = document.getElementById('previewImg');
+const overlay = document.getElementById('overlay');
+const detectBtn = document.getElementById('detectBtn');
+const resultBox = document.getElementById('result');
+const plateText = document.getElementById('plateText');
+const confBar = document.getElementById('confBar');
+const confVal = document.getElementById('confVal');
+const copyBtn = document.getElementById('copyBtn');
+const resetBtn = document.getElementById('resetBtn');
+const errorBox = document.getElementById('error');
+const hint = document.getElementById('hint');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+let currentFile = null, lastResult = null;
 
-        // Clear previous images and append the new one
-        imageBox.innerHTML = '';
-        imageBox.appendChild(img);
-      };
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.add('show');
+  setTimeout(() => errorBox.classList.remove('show'), 6000);
+}
 
-      reader.readAsDataURL(event.target.files[0]);
+// ---- warmup state ---------------------------------------------------------
+async function pollHealth() {
+  try {
+    const r = await fetch('/health');
+    const j = await r.json();
+    if (j.reader_ready) {
+      statusDot.className = 'dot ready';
+      statusText.textContent = 'AI model ready';
+      return;
     }
+  } catch (e) { /* backend unreachable; detect will surface it */ }
+  statusDot.className = 'dot warming';
+  statusText.textContent = 'Warming up AI model (first run loads ~100MB)…';
+  setTimeout(pollHealth, 5000);
+}
+pollHealth();
 
-    async function openCamera(buttonElement) {
-      const constraints = {
-        video: {
-          facingMode: "environment"
-        }
-      };
+// ---- file intake ----------------------------------------------------------
+drop.addEventListener('click', () => fileInput.click());
+['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) setFile(f); });
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+document.addEventListener('paste', e => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (item) setFile(item.getAsFile());
+});
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        const video = document.getElementById('cameraVideo');
-        video.srcObject = stream;
-        video.autoplay = true;
+function setFile(file) {
+  if (!file.type.startsWith('image/')) return showError('That is not an image file.');
+  if (file.size > 16 * 1024 * 1024) return showError('Image is larger than 16 MB.');
+  currentFile = file;
+  lastResult = null;
+  previewImg.src = URL.createObjectURL(file);
+  previewCard.classList.add('show');
+  resultBox.classList.remove('show');
+  hint.style.display = 'block';
+  detectBtn.disabled = false;
+  detectBtn.innerHTML = 'Detect number plate';
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  previewCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
-        const modal = document.getElementById('cameraModal');
-        modal.style.display = 'block';
+resetBtn.addEventListener('click', () => {
+  currentFile = null; fileInput.value = '';
+  previewCard.classList.remove('show');
+  detectBtn.disabled = true;
+});
 
-        const captureButton = document.getElementById('captureButton');
-        captureButton.onclick = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0);
+// ---- detection ------------------------------------------------------------
+detectBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  detectBtn.disabled = true;
+  detectBtn.innerHTML = '<span class="spin"></span>Detecting…';
+  hint.textContent = 'Uploading image, localizing plate, running OCR… (first ever run loads the AI model, ~1 min)';
+  try {
+    const form = new FormData();
+    form.append('image', currentFile);
+    const r = await fetch('/api/detect', { method: 'POST', body: form });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Detection failed');
+    lastResult = j;
+    renderResult(j);
+  } catch (err) {
+    showError(err.message || 'Something went wrong.');
+  } finally {
+    detectBtn.disabled = false;
+    detectBtn.innerHTML = 'Detect number plate';
+  }
+});
 
-          const img = new Image();
-          img.src = canvas.toDataURL('image/jpeg');
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
+function renderResult(j) {
+  resultBox.classList.add('show');
+  hint.style.display = 'none';
+  if (j.plate_text) {
+    plateText.textContent = j.plate_text;
+    const pct = Math.round(j.confidence * 100);
+    confBar.style.width = pct + '%';
+    confVal.textContent = pct + '%';
+  } else {
+    plateText.textContent = 'NO PLATE FOUND';
+    plateText.style.color = 'var(--bad)';
+    plateText.style.borderColor = 'var(--bad)';
+    confBar.style.width = '0%';
+    confVal.textContent = '–';
+  }
+  drawOverlay(j);
+  resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
-          const imageBox = buttonElement.closest('.card').querySelector('.image-box');
-          imageBox.innerHTML = '';
-          imageBox.appendChild(img);
+function drawOverlay(j) {
+  const stage = document.getElementById('imgStage');
+  const rect = previewImg.getBoundingClientRect();
+  overlay.width = rect.width; overlay.height = rect.height;
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  const sx = rect.width / j.image_width, sy = rect.height / j.image_height;
+  j.boxes.forEach(b => {
+    const isMatch = j.match && b.x === j.match.x && b.y === j.match.y;
+    ctx.strokeStyle = isMatch ? '#22d3ee' : 'rgba(255,255,255,.45)';
+    ctx.lineWidth = isMatch ? 3 : 1.5;
+    ctx.setLineDash(isMatch ? [] : [6, 4]);
+    ctx.strokeRect(b.x * sx, b.y * sy, b.w * sx, b.h * sy);
+  });
+  ctx.setLineDash([]);
+}
+window.addEventListener('resize', () => { if (lastResult) drawOverlay(lastResult); });
 
-          // Close the modal and stop the video stream
-          modal.style.display = 'none';
-          video.srcObject.getTracks().forEach(track => track.stop());
-        };
-      } catch (err) {
-        console.error(err);
-        alert('Error accessing the camera');
-      }
-    }
-
-    // ...
-  </script>
+copyBtn.addEventListener('click', async () => {
+  if (!lastResult?.plate_text) return;
+  try {
+    await navigator.clipboard.writeText(lastResult.plate_text);
+    copyBtn.textContent = 'Copied ✓';
+    setTimeout(() => copyBtn.textContent = 'Copy plate', 1500);
+  } catch (e) { showError('Clipboard blocked by the browser.'); }
+});
+</script>
 </body>
-
 </html>
